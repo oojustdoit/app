@@ -27,14 +27,14 @@ jobs:
 
       - name: Deploy to Server via SSH
         uses: appleboy/ssh-action@v1.0.0
+        env:
+          IMAGE_TAG: ${{ github.sha }}          # 关键：定义变量
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USERNAME }}
           key: ${{ secrets.SERVER_SSH_KEY }}
-          # 关键：声明要传递的环境变量列表
-          envs: IMAGE_TAG
+          envs: IMAGE_TAG                        # 关键：声明要传递的变量列表
           script: |
-            # 这里可以直接引用 $IMAGE_TAG，因为已经通过 envs 传入
             echo "Deploying version: $IMAGE_TAG"
             
             # 拉取特定版本
@@ -68,7 +68,7 @@ jobs:
             # 启动新容器到 5000
             docker run -d -p 5000:5000 --name my-running-app muzioooo/my-first-app:$IMAGE_TAG
             
-            # 删除临时新容器（已停止并删除，但为了保险再执行一次）
+            # 删除临时新容器（已经停止，但为了保险再执行一次）
             docker stop my-app-new || true
             docker rm my-app-new || true
             
@@ -81,7 +81,6 @@ jobs:
               sleep 1
             done
             
-            # 如果最终检查失败
             echo "❌ Final health check failed!"
             docker logs --tail 50 my-running-app
             exit 1
