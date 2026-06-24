@@ -27,21 +27,23 @@ jobs:
 
       - name: Deploy to Server via SSH
         uses: appleboy/ssh-action@v1.0.0
-        env:
-          IMAGE_TAG: ${{ github.sha }}
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USERNAME }}
           key: ${{ secrets.SERVER_SSH_KEY }}
+          # 关键：声明要传递的环境变量列表
+          envs: IMAGE_TAG
           script: |
+            # 这里可以直接引用 $IMAGE_TAG，因为已经通过 envs 传入
+            echo "Deploying version: $IMAGE_TAG"
+            
             # 拉取特定版本
-            docker pull muzioooo/my-first-app:${IMAGE_TAG}
-
-            # 蓝绿部署（灰度）
-            # 启动新容器在 5001
-            docker run -d -p 5001:5000 --name my-app-new muzioooo/my-first-app:${IMAGE_TAG}
-
-            # 健康检查新容器
+            docker pull muzioooo/my-first-app:$IMAGE_TAG
+            
+            # 蓝绿部署：启动新容器在 5001
+            docker run -d -p 5001:5000 --name my-app-new muzioooo/my-first-app:$IMAGE_TAG
+            
+            # 健康检查新容器（最多等待30秒）
             for i in $(seq 1 30); do
               if curl -f http://localhost:5001 > /dev/null 2>&1; then
                 echo "✅ New version healthy"
@@ -49,19 +51,28 @@ jobs:
               fi
               sleep 1
             done
-
-            # 停止旧容器
+            
+            # 检查是否健康（若30次循环都没成功，则直接失败退出）
+            if ! curl -f http://localhost:5001 > /dev/null 2>&1; then
+              echo "❌ New container health check failed"
+              docker logs --tail 50 my-app-new
+              docker stop my-app-new || true
+              docker rm my-app-new || true
+              exit 1
+            fi
+            
+            # 停止并删除旧容器
             docker stop my-running-app || true
             docker rm my-running-app || true
-
+            
             # 启动新容器到 5000
-            docker run -d -p 5000:5000 --name my-running-app muzioooo/my-first-app:${IMAGE_TAG}
-
-            # 删除临时新容器
+            docker run -d -p 5000:5000 --name my-running-app muzioooo/my-first-app:$IMAGE_TAG
+            
+            # 删除临时新容器（已停止并删除，但为了保险再执行一次）
             docker stop my-app-new || true
             docker rm my-app-new || true
-
-            # 健康检查最终服务
+            
+            # 最终健康检查
             for i in $(seq 1 30); do
               if curl -f http://localhost:5000 > /dev/null 2>&1; then
                 echo "✅ Deployment successful!"
@@ -69,6 +80,8 @@ jobs:
               fi
               sleep 1
             done
+            
+            # 如果最终检查失败
             echo "❌ Final health check failed!"
             docker logs --tail 50 my-running-app
             exit 1
