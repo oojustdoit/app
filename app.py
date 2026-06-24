@@ -1,20 +1,19 @@
 from flask import Flask
-# 1. 导入 PrometheusMetrics
 from prometheus_flask_exporter import PrometheusMetrics
 
 app = Flask(__name__)
 
-# 2. 初始化 PrometheusMetrics，并关联到 app
-#    这一步会自动为所有路由添加默认的监控指标[reference:2]
+# 初始化 Prometheus 监控
+# 会自动为所有路由添加请求数、响应时间、异常等指标
 metrics = PrometheusMetrics(app)
 
-# (可选) 添加一些静态的应用信息作为指标[reference:3]
+# 添加一个自定义的应用信息指标（可选）
 metrics.info('app_info', 'Application info', version='1.0.0')
 
 @app.route('/')
 def hello():
-    return "Hello DevOps! 我的第一个容器化应用"
+    return "Hello DevOps! 我的第一个容器化应用 (监控已集成)"
 
 if __name__ == '__main__':
-    # 3. 确保监听 0.0.0.0，使 Prometheus 能访问到
+    # 必须绑定 0.0.0.0，否则容器外部无法访问
     app.run(host='0.0.0.0', port=5000)
